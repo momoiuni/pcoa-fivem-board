@@ -1,31 +1,58 @@
 <!DOCTYPE html>
-
 <html lang="ja">
 <head>
-
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <title>PCOA FiveM 作戦ボード</title>
 
 <style>
 
-body{margin:0;font-family:sans-serif;background:#111;color:white;display:flex;height:100vh;overflow:hidden;}
+body{
+margin:0;
+font-family:sans-serif;
+background:#111;
+color:white;
+display:flex;
+height:100vh;
+overflow:hidden;
+}
 
-#left{width:230px;background:#1a1a1a;padding:10px;overflow:auto;}
+#left{
+width:230px;
+background:#1a1a1a;
+padding:10px;
+overflow:auto;
+}
 
-.player{background:#2b2b2b;padding:7px;margin:4px 0;border-radius:6px;cursor:pointer;}
+.player{
+background:#2b2b2b;
+padding:7px;
+margin:4px 0;
+border-radius:6px;
+cursor:pointer;
+}
 
-#board{flex:1;position:relative;overflow:hidden;touch-action:none;}
+#board{
+flex:1;
+position:relative;
+overflow:hidden;
+touch-action:none;
+}
 
-#mapWrapper{
+#map{
+width:100%;
+height:100%;
+object-fit:cover;
+position:absolute;
+z-index:1;
+}
+
+canvas{
 position:absolute;
 top:0;
 left:0;
-transform-origin:0 0;
+z-index:2;
 }
-
-#map{width:100%;height:100%;object-fit:contain;pointer-events:none;}
 
 .icon{
 position:absolute;
@@ -38,16 +65,26 @@ justify-content:center;
 font-weight:bold;
 color:white;
 cursor:grab;
+z-index:3;
 }
 
-#top{position:absolute;top:10px;left:250px;z-index:10;}
+.police{background:#3498db;}
+.gang{background:#e74c3c;}
+.merc{background:#9b59b6;}
 
-button{margin:2px;padding:6px;}
+#top{
+position:absolute;
+top:10px;
+left:250px;
+z-index:4;
+}
 
-canvas{position:absolute;top:0;left:0;}
+button{
+margin:2px;
+padding:6px;
+}
 
 </style>
-
 </head>
 
 <body>
@@ -79,13 +116,9 @@ canvas{position:absolute;top:0;left:0;}
 
 <div id="board">
 
-<div id="mapWrapper">
-
 <img id="map" src="bobcat.jpg">
 
 <canvas id="draw"></canvas>
-
-</div>
 
 <div id="top">
 
@@ -101,155 +134,31 @@ canvas{position:absolute;top:0;left:0;}
 </select>
 <br>
 
-<button onclick="mode='line'">線</button> <button onclick="mode='arrow'">矢印</button> <button onclick="undo()">戻る</button> <button onclick="clearDraw()">削除</button>
+<button onclick="mode='line'">線</button>
+<button onclick="mode='arrow'">矢印</button>
+<button onclick="undo()">戻る</button>
+<button onclick="clearDraw()">削除</button>
 
 </div>
 
 </div>
-
-<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-
-<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 
 <script>
 
-/* Firebase */
-
-var firebaseConfig={
-apiKey:"AIzaSyBmvXnvy1ttB8QllcCcm6eW2ZV7Qg-ZFW4",
-authDomain:"pcoa-plan.firebaseapp.com",
-projectId:"pcoa-plan",
-storageBucket:"pcoa-plan.appspot.com",
-messagingSenderId:"121585105198",
-appId:"1:121585105198:web:4fe893ae9be81ba23822bf"
-}
-
-firebase.initializeApp(firebaseConfig)
-var db=firebase.firestore()
-
-/* room */
-
-let params=new URLSearchParams(location.search)
-let room=params.get("room")||Math.random().toString(36).substr(2,6)
-
-history.replaceState(null,null,"?room="+room)
-
-/* user */
-
-let userColor=`hsl(${Math.random()*360},70%,50%)`
-
-/* zoom */
-
 const board=document.getElementById("board")
-const mapWrapper=document.getElementById("mapWrapper")
-
-let scale=1
-let posX=0
-let posY=0
-
-function updateTransform(){
-mapWrapper.style.transform=`translate(${posX}px,${posY}px) scale(${scale})`
-}
-
-board.addEventListener("wheel",e=>{
-e.preventDefault()
-scale*=e.deltaY>0?0.9:1.1
-scale=Math.min(Math.max(0.5,scale),3)
-updateTransform()
-})
-
-/* pinch zoom */
-
-let lastDist=0
-
-board.addEventListener("touchmove",e=>{
-
-if(e.touches.length==2){
-
-let dx=e.touches[0].clientX-e.touches[1].clientX
-let dy=e.touches[0].clientY-e.touches[1].clientY
-let dist=Math.sqrt(dx*dx+dy*dy)
-
-if(lastDist){
-scale*=dist/lastDist
-scale=Math.min(Math.max(0.5,scale),3)
-updateTransform()
-}
-
-lastDist=dist
-
-}
-
-})
-
-/* spawn */
 
 function spawn(char,type){
 
-db.collection("rooms").doc(room).collection("icons").add({
-
-char:char,
-type:type,
-x:200,
-y:200,
-color:userColor
-
-})
-
-}
-
-/* realtime icons */
-
-db.collection("rooms").doc(room).collection("icons")
-
-.onSnapshot(snapshot=>{
-
-snapshot.docChanges().forEach(change=>{
-
-let data=change.doc.data()
-let el=document.getElementById(change.doc.id)
-
-if(change.type==="added"){
-
 let icon=document.createElement("div")
+icon.className="icon "+type
+icon.innerText=char
+icon.style.left="200px"
+icon.style.top="200px"
 
-icon.className="icon "+data.type
-icon.innerText=data.char
-icon.style.left=data.x+"px"
-icon.style.top=data.y+"px"
-icon.style.background=data.color
-icon.id=change.doc.id
-
-mapWrapper.appendChild(icon)
-
+board.appendChild(icon)
 drag(icon)
 
-icon.oncontextmenu=e=>{
-e.preventDefault()
-db.collection("rooms").doc(room)
-.collection("icons").doc(icon.id).delete()
 }
-
-}
-
-if(change.type==="modified"){
-
-el.style.left=data.x+"px"
-el.style.top=data.y+"px"
-
-}
-
-if(change.type==="removed"){
-
-el.remove()
-
-}
-
-})
-
-})
-
-/* drag */
 
 function drag(el){
 
@@ -269,28 +178,26 @@ function move(e){
 el.style.left=e.clientX-offsetX+"px"
 el.style.top=e.clientY-offsetY+"px"
 
-db.collection("rooms").doc(room)
-.collection("icons").doc(el.id).update({
+}
 
-x:parseInt(el.style.left),
-y:parseInt(el.style.top)
+document.onmouseup=()=>{
 
-})
+document.onmousemove=null
 
 }
 
-document.onmouseup=()=>document.onmousemove=null
-
 }
 
-/* canvas */
+/* ===== CANVAS ===== */
 
 let canvas=document.getElementById("draw")
 let ctx=canvas.getContext("2d")
 
 function resize(){
+
 canvas.width=board.clientWidth
 canvas.height=board.clientHeight
+
 }
 
 window.onresize=resize
@@ -302,76 +209,73 @@ let mode="line"
 let history=[]
 
 canvas.onmousedown=e=>{
+
 drawing=true
 startX=e.offsetX
 startY=e.offsetY
+
 }
 
 canvas.onmouseup=e=>{
 
-if(!drawing)return
+if(!drawing) return
 drawing=false
 
-let data={
-x1:startX,
-y1:startY,
-x2:e.offsetX,
-y2:e.offsetY,
-mode:mode,
-color:userColor
-}
+history.push(ctx.getImageData(0,0,canvas.width,canvas.height))
 
-db.collection("rooms").doc(room)
-.collection("lines").add(data)
-
-}
-
-db.collection("rooms").doc(room)
-.collection("lines")
-
-.onSnapshot(snapshot=>{
-
-snapshot.docChanges().forEach(change=>{
-
-let d=change.doc.data()
-
-ctx.strokeStyle=d.color
+ctx.strokeStyle="red"
 ctx.lineWidth=4
 
 ctx.beginPath()
-ctx.moveTo(d.x1,d.y1)
-ctx.lineTo(d.x2,d.y2)
+ctx.moveTo(startX,startY)
+ctx.lineTo(e.offsetX,e.offsetY)
 ctx.stroke()
 
-if(d.mode==="arrow"){
+if(mode==="arrow"){
 
-let angle=Math.atan2(d.y2-d.y1,d.x2-d.x1)
+let angle=Math.atan2(e.offsetY-startY,e.offsetX-startX)
 
 ctx.beginPath()
-ctx.moveTo(d.x2,d.y2)
-ctx.lineTo(d.x2-15*Math.cos(angle-0.5),d.y2-15*Math.sin(angle-0.5))
-ctx.lineTo(d.x2-15*Math.cos(angle+0.5),d.y2-15*Math.sin(angle+0.5))
+ctx.moveTo(e.offsetX,e.offsetY)
+ctx.lineTo(e.offsetX-15*Math.cos(angle-0.5),e.offsetY-15*Math.sin(angle-0.5))
+ctx.lineTo(e.offsetX-15*Math.cos(angle+0.5),e.offsetY-15*Math.sin(angle+0.5))
 ctx.closePath()
-ctx.fillStyle=d.color
+ctx.fillStyle="red"
 ctx.fill()
 
 }
 
-})
-
-})
+}
 
 function undo(){
-location.reload()
+
+if(history.length>0){
+ctx.putImageData(history.pop(),0,0)
+}
+
 }
 
 function clearDraw(){
-location.reload()
+
+ctx.clearRect(0,0,canvas.width,canvas.height)
+history=[]
+
 }
 
 document.getElementById("mapSelect").onchange=e=>{
 document.getElementById("map").src=e.target.value
 }
+
+/* ===== スマホピンチズーム ===== */
+
+let scale=1
+
+board.addEventListener("wheel",e=>{
+e.preventDefault()
+scale+=e.deltaY*-0.001
+scale=Math.min(Math.max(.5,scale),3)
+board.style.transform=`scale(${scale})`
+})
 
 </script>
 
