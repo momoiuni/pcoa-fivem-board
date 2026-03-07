@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+
 <html lang="ja">
 <head>
 
@@ -9,37 +10,13 @@
 
 <style>
 
-body{
-margin:0;
-font-family:sans-serif;
-background:#111;
-color:white;
-display:flex;
-height:100vh;
-overflow:hidden;
-}
+body{margin:0;font-family:sans-serif;background:#111;color:white;display:flex;height:100vh;overflow:hidden;}
 
-#left{
-width:230px;
-background:#1a1a1a;
-padding:10px;
-overflow:auto;
-}
+#left{width:230px;background:#1a1a1a;padding:10px;overflow:auto;}
 
-.player{
-background:#2b2b2b;
-padding:7px;
-margin:4px 0;
-border-radius:6px;
-cursor:pointer;
-}
+.player{background:#2b2b2b;padding:7px;margin:4px 0;border-radius:6px;cursor:pointer;}
 
-#board{
-flex:1;
-position:relative;
-overflow:hidden;
-touch-action:none;
-}
+#board{flex:1;position:relative;overflow:hidden;touch-action:none;}
 
 #mapWrapper{
 position:absolute;
@@ -48,12 +25,7 @@ left:0;
 transform-origin:0 0;
 }
 
-#map{
-width:100%;
-height:100%;
-object-fit:contain;
-pointer-events:none;
-}
+#map{width:100%;height:100%;object-fit:contain;pointer-events:none;}
 
 .icon{
 position:absolute;
@@ -72,47 +44,11 @@ cursor:grab;
 .gang{background:#e74c3c;}
 .merc{background:#9b59b6;}
 
-#top{
-position:absolute;
-top:10px;
-left:250px;
-z-index:10;
-}
+#top{position:absolute;top:10px;left:250px;z-index:10;}
 
-button{
-margin:2px;
-padding:6px;
-}
+button{margin:2px;padding:6px;}
 
-canvas{
-position:absolute;
-top:0;
-left:0;
-}
-
-@media (max-width:800px){
-
-body{
-flex-direction:column;
-}
-
-#left{
-width:100%;
-height:200px;
-display:flex;
-flex-wrap:wrap;
-}
-
-.player{
-font-size:12px;
-padding:5px;
-}
-
-#top{
-left:10px;
-}
-
-}
+canvas{position:absolute;top:0;left:0;}
 
 </style>
 
@@ -169,33 +105,35 @@ left:10px;
 </select>
 <br>
 
-<button onclick="mode='line'">線</button>
-<button onclick="mode='arrow'">矢印</button>
-<button onclick="undo()">戻る</button>
-<button onclick="clearDraw()">削除</button>
+<button onclick="mode='line'">線</button> <button onclick="mode='arrow'">矢印</button> <button onclick="undo()">戻る</button> <button onclick="clearDraw()">削除</button>
 
 </div>
 
 </div>
 
-<script type="module">
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, collection, addDoc, onSnapshot, updateDoc, doc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 
-const firebaseConfig = {
+<script>
 
-PASTE_FIREBASE_CONFIG_HERE
-
+/* Firebase設定 */
+var firebaseConfig = {
+apiKey: "AIzaSyBmvXnvy1ttB8QllcCcm6eW2ZV7Qg-ZFW4",
+  authDomain: "pcoa-plan.firebaseapp.com",
+  projectId: "pcoa-plan",
+  storageBucket: "pcoa-plan.firebasestorage.app",
+  messagingSenderId: "121585105198",
+  appId: "1:121585105198:web:4fe893ae9be81ba23822bf"
 };
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+firebase.initializeApp(firebaseConfig);
+var db = firebase.firestore();
+
+/* ズーム */
 
 const board=document.getElementById("board")
 const mapWrapper=document.getElementById("mapWrapper")
-
-/* ZOOM */
 
 let scale=1
 let posX=0
@@ -205,44 +143,31 @@ function updateTransform(){
 mapWrapper.style.transform=`translate(${posX}px,${posY}px) scale(${scale})`
 }
 
-board.onwheel=e=>{
+board.addEventListener("wheel",e=>{
 e.preventDefault()
 scale*=e.deltaY>0?0.9:1.1
 scale=Math.min(Math.max(0.5,scale),3)
 updateTransform()
-}
+})
 
-/* MAP DRAG */
+/* アイコン生成 */
 
-let dragMap=false
-let startX,startY
+function spawn(char,type){
 
-board.onmousedown=e=>{
+db.collection("icons").add({
 
-if(e.target.classList.contains("icon")) return
+char:char,
+type:type,
+x:200,
+y:200
 
-dragMap=true
-startX=e.clientX-posX
-startY=e.clientY-posY
-
-}
-
-board.onmousemove=e=>{
-
-if(!dragMap) return
-
-posX=e.clientX-startX
-posY=e.clientY-startY
-
-updateTransform()
+})
 
 }
 
-board.onmouseup=()=>dragMap=false
+/* realtime */
 
-/* REALTIME ICONS */
-
-onSnapshot(collection(db,"icons"),snapshot=>{
+db.collection("icons").onSnapshot(snapshot=>{
 
 snapshot.docChanges().forEach(change=>{
 
@@ -254,8 +179,8 @@ if(change.type==="added"){
 let icon=document.createElement("div")
 icon.className="icon "+data.type
 icon.innerText=data.char
-icon.style.left=data.x+"px"
-icon.style.top=data.y+"px"
+icon.style.left=data.x+"px
+icon.style.top=data.y+"px
 icon.id=change.doc.id
 
 mapWrapper.appendChild(icon)
@@ -266,8 +191,8 @@ drag(icon)
 
 if(change.type==="modified"){
 
-el.style.left=data.x+"px"
-el.style.top=data.y+"px"
+el.style.left=data.x+"px
+el.style.top=data.y+"px
 
 }
 
@@ -275,22 +200,7 @@ el.style.top=data.y+"px"
 
 })
 
-/* SPAWN */
-
-async function spawn(char,type){
-
-await addDoc(collection(db,"icons"),{
-
-char:char,
-type:type,
-x:200,
-y:200
-
-})
-
-}
-
-/* DRAG */
+/* ドラッグ */
 
 function drag(el){
 
@@ -310,9 +220,11 @@ function move(e){
 el.style.left=e.clientX-offsetX+"px"
 el.style.top=e.clientY-offsetY+"px"
 
-updateDoc(doc(db,"icons",el.id),{
+db.collection("icons").doc(el.id).update({
+
 x:parseInt(el.style.left),
 y:parseInt(el.style.top)
+
 })
 
 }
@@ -321,16 +233,14 @@ document.onmouseup=()=>document.onmousemove=null
 
 }
 
-/* CANVAS */
+/* Canvas */
 
 let canvas=document.getElementById("draw")
 let ctx=canvas.getContext("2d")
 
 function resize(){
-
 canvas.width=board.clientWidth
 canvas.height=board.clientHeight
-
 }
 
 window.onresize=resize
@@ -342,11 +252,9 @@ let mode="line"
 let history=[]
 
 canvas.onmousedown=e=>{
-
 drawing=true
 startX=e.offsetX
 startY=e.offsetY
-
 }
 
 canvas.onmouseup=e=>{
@@ -398,9 +306,7 @@ history=[]
 }
 
 document.getElementById("mapSelect").onchange=e=>{
-
 document.getElementById("map").src=e.target.value
-
 }
 
 </script>
