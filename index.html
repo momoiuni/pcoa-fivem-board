@@ -1,25 +1,121 @@
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PCOA FiveM 作戦ボード V10</title>
+
+<title>PCOA FiveM 作戦ボード</title>
 
 <style>
-body{margin:0;font-family:sans-serif;background:#111;color:white;display:flex;height:100vh;overflow:hidden;}
-#left{width:230px;background:#1a1a1a;padding:10px;overflow:auto;}
-.player{background:#2b2b2b;padding:7px;margin:4px 0;border-radius:6px;cursor:pointer;}
-#board{flex:1;position:relative;overflow:hidden;}
-#map{width:100%;height:100%;object-fit:cover;}
-.icon{position:absolute;width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;color:white;cursor:grab;}
+
+body{
+margin:0;
+font-family:sans-serif;
+background:#111;
+color:white;
+display:flex;
+height:100vh;
+overflow:hidden;
+}
+
+#left{
+width:230px;
+background:#1a1a1a;
+padding:10px;
+overflow:auto;
+}
+
+.player{
+background:#2b2b2b;
+padding:7px;
+margin:4px 0;
+border-radius:6px;
+cursor:pointer;
+}
+
+#board{
+flex:1;
+position:relative;
+overflow:hidden;
+touch-action:none;
+}
+
+#mapWrapper{
+position:absolute;
+top:0;
+left:0;
+transform-origin:0 0;
+}
+
+#map{
+width:100%;
+height:100%;
+object-fit:contain;
+pointer-events:none;
+}
+
+.icon{
+position:absolute;
+width:42px;
+height:42px;
+border-radius:50%;
+display:flex;
+align-items:center;
+justify-content:center;
+font-weight:bold;
+color:white;
+cursor:grab;
+}
+
 .police{background:#3498db;}
 .gang{background:#e74c3c;}
 .merc{background:#9b59b6;}
-#top{position:absolute;top:10px;left:250px;z-index:10;}
-button{margin:2px;padding:6px;}
-canvas{position:absolute;top:0;left:0;}
+
+#top{
+position:absolute;
+top:10px;
+left:250px;
+z-index:10;
+}
+
+button{
+margin:2px;
+padding:6px;
+}
+
+canvas{
+position:absolute;
+top:0;
+left:0;
+}
+
+@media (max-width:800px){
+
+body{
+flex-direction:column;
+}
+
+#left{
+width:100%;
+height:200px;
+display:flex;
+flex-wrap:wrap;
+}
+
+.player{
+font-size:12px;
+padding:5px;
+}
+
+#top{
+left:10px;
+}
+
+}
+
 </style>
+
 </head>
 
 <body>
@@ -28,9 +124,6 @@ canvas{position:absolute;top:0;left:0;}
 
 <h3>警察</h3>
 <div class="player" onclick="spawn('警','police')">警察①</div>
-<div class="player" onclick="spawn('警','police')">警察②</div>
-<div class="player" onclick="spawn('警','police')">警察③</div>
-<div class="player" onclick="spawn('警','police')">警察④</div>
 
 <h3>ギャング</h3>
 <div class="player" onclick="spawn('七','gang')">七海のあ</div>
@@ -54,9 +147,13 @@ canvas{position:absolute;top:0;left:0;}
 
 <div id="board">
 
+<div id="mapWrapper">
+
 <img id="map" src="bobcat.jpg">
 
 <canvas id="draw"></canvas>
+
+</div>
 
 <div id="top">
 
@@ -74,29 +171,126 @@ canvas{position:absolute;top:0;left:0;}
 
 <button onclick="mode='line'">線</button>
 <button onclick="mode='arrow'">矢印</button>
-<button onclick="undo()">Undo</button>
+<button onclick="undo()">戻る</button>
 <button onclick="clearDraw()">削除</button>
 
 </div>
 
 </div>
 
-<script>
+<script type="module">
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getFirestore, collection, addDoc, onSnapshot, updateDoc, doc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+const firebaseConfig = {
+
+PASTE_FIREBASE_CONFIG_HERE
+
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 
 const board=document.getElementById("board")
+const mapWrapper=document.getElementById("mapWrapper")
 
-function spawn(char,type){
+/* ZOOM */
+
+let scale=1
+let posX=0
+let posY=0
+
+function updateTransform(){
+mapWrapper.style.transform=`translate(${posX}px,${posY}px) scale(${scale})`
+}
+
+board.onwheel=e=>{
+e.preventDefault()
+scale*=e.deltaY>0?0.9:1.1
+scale=Math.min(Math.max(0.5,scale),3)
+updateTransform()
+}
+
+/* MAP DRAG */
+
+let dragMap=false
+let startX,startY
+
+board.onmousedown=e=>{
+
+if(e.target.classList.contains("icon")) return
+
+dragMap=true
+startX=e.clientX-posX
+startY=e.clientY-posY
+
+}
+
+board.onmousemove=e=>{
+
+if(!dragMap) return
+
+posX=e.clientX-startX
+posY=e.clientY-startY
+
+updateTransform()
+
+}
+
+board.onmouseup=()=>dragMap=false
+
+/* REALTIME ICONS */
+
+onSnapshot(collection(db,"icons"),snapshot=>{
+
+snapshot.docChanges().forEach(change=>{
+
+let data=change.doc.data()
+let el=document.getElementById(change.doc.id)
+
+if(change.type==="added"){
 
 let icon=document.createElement("div")
-icon.className="icon "+type
-icon.innerText=char
-icon.style.left="200px"
-icon.style.top="200px"
+icon.className="icon "+data.type
+icon.innerText=data.char
+icon.style.left=data.x+"px"
+icon.style.top=data.y+"px"
+icon.id=change.doc.id
 
-board.appendChild(icon)
+mapWrapper.appendChild(icon)
+
 drag(icon)
 
 }
+
+if(change.type==="modified"){
+
+el.style.left=data.x+"px"
+el.style.top=data.y+"px"
+
+}
+
+})
+
+})
+
+/* SPAWN */
+
+async function spawn(char,type){
+
+await addDoc(collection(db,"icons"),{
+
+char:char,
+type:type,
+x:200,
+y:200
+
+})
+
+}
+
+/* DRAG */
 
 function drag(el){
 
@@ -116,15 +310,18 @@ function move(e){
 el.style.left=e.clientX-offsetX+"px"
 el.style.top=e.clientY-offsetY+"px"
 
-}
-
-document.onmouseup=()=>{
-
-document.onmousemove=null
-
-}
+updateDoc(doc(db,"icons",el.id),{
+x:parseInt(el.style.left),
+y:parseInt(el.style.top)
+})
 
 }
+
+document.onmouseup=()=>document.onmousemove=null
+
+}
+
+/* CANVAS */
 
 let canvas=document.getElementById("draw")
 let ctx=canvas.getContext("2d")
@@ -154,7 +351,7 @@ startY=e.offsetY
 
 canvas.onmouseup=e=>{
 
-if(!drawing) return
+if(!drawing)return
 drawing=false
 
 history.push(ctx.getImageData(0,0,canvas.width,canvas.height))
