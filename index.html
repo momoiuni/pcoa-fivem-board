@@ -149,6 +149,20 @@ appId:"1:121585105198:web:4fe893ae9be81ba23822bf"
 const app=initializeApp(firebaseConfig)
 const db=getFirestore(app)
 
+  /* ルーム */
+
+const params=new URLSearchParams(location.search)
+const room=params.get("room") || "main"
+
+const iconRef=doc(db,"boards",room+"_icons")
+const lineRef=doc(db,"boards",room+"_lines")
+
+const board=document.getElementById("board")
+
+/* ユーザー色 */
+
+const userColor="#"+Math.floor(Math.random()*16777215).toString(16)
+  
 const params=new URLSearchParams(location.search)
 
 const room=params.get("room") || "main"
