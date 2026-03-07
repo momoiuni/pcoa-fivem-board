@@ -422,6 +422,34 @@ startDist=newDist
 
 })
 
+  /* 線削除 */
+
+window.clearDraw = async function(){
+
+ctx.clearRect(0,0,canvas.width,canvas.height)
+
+await setDoc(lineRef,{lines:[]})
+
+}
+
+/* Undo */
+
+window.undo = async function(){
+
+const snap = await getDoc(lineRef)
+
+if(!snap.exists()) return
+
+let data = snap.data()
+
+if(!data.lines) return
+
+data.lines.pop()
+
+await setDoc(lineRef,data)
+
+}
+
 </script>
 
 </body>
