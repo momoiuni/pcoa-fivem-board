@@ -393,7 +393,6 @@ ctx.fill()
 let scale = 1
 
 
-
 /* PCズーム */
 
 board.addEventListener("wheel",e=>{
@@ -403,9 +402,6 @@ e.preventDefault()
 scale += e.deltaY * -0.001
 scale = Math.min(Math.max(.5,scale),3)
 
-applyTransform()
-
-})
 })
 
 /* スマホピンチズーム */
