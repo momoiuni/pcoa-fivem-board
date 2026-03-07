@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PCOA FiveM 作戦ボード</title>
+<title>FiveM 作戦ボード</title>
 
 <style>
 
@@ -18,7 +18,7 @@ overflow:hidden;
 }
 
 #left{
-width:230px;
+width:220px;
 background:#1a1a1a;
 padding:10px;
 overflow:auto;
@@ -40,11 +40,12 @@ touch-action:none;
 }
 
 #map{
+position:absolute;
 width:100%;
 height:100%;
 object-fit:cover;
-position:absolute;
 z-index:1;
+transform-origin:center;
 }
 
 canvas{
@@ -75,7 +76,7 @@ z-index:3;
 #top{
 position:absolute;
 top:10px;
-left:250px;
+left:240px;
 z-index:4;
 }
 
@@ -92,25 +93,15 @@ padding:6px;
 <div id="left">
 
 <h3>警察</h3>
-<div class="player" onclick="spawn('警','police')">警察①</div>
+<div class="player" onclick="spawn('警','police')">警察</div>
 
 <h3>ギャング</h3>
 <div class="player" onclick="spawn('七','gang')">七海のあ</div>
-<div class="player" onclick="spawn('禿','gang')">蒼瀬こあ</div>
-<div class="player" onclick="spawn('狼','gang')">白影潤羽</div>
-<div class="player" onclick="spawn('獅','gang')">獅子蓮夢生</div>
-<div class="player" onclick="spawn('犬','gang')">只野なち</div>
 <div class="player" onclick="spawn('兎','gang')">兎月羅依</div>
-<div class="player" onclick="spawn('嬢','gang')">雛子丸びこち</div>
-<div class="player" onclick="spawn('牛','gang')">奇美羅ぬい仔</div>
 <div class="player" onclick="spawn('猫','gang')">猫宮すい</div>
-<div class="player" onclick="spawn('ゼ','gang')">古賀ゼン</div>
-<div class="player" onclick="spawn('華','gang')">風槻華音</div>
-<div class="player" onclick="spawn('雷','gang')">雷導新羅</div>
 
 <h3>傭兵</h3>
 <div class="player" onclick="spawn('澪','merc')">神楽澪</div>
-<div class="player" onclick="spawn('弟','merc')">桃井そら</div>
 
 </div>
 
@@ -122,18 +113,6 @@ padding:6px;
 
 <div id="top">
 
-<select id="mapSelect">
-<option value="bobcat.jpg">ボブキャット</option>
-<option value="military.jpg">軍事基地</option>
-<option value="airport.jpg">飛行場</option>
-<option value="ship.jpg">客船</option>
-<option value="artifact.jpg">アーティファクト</option>
-<option value="union.jpg">ユニオン</option>
-<option value="humane.jpg">ヒューメイン</option>
-<option value="pacific.jpg">パシフィック</option>
-</select>
-<br>
-
 <button onclick="mode='line'">線</button>
 <button onclick="mode='arrow'">矢印</button>
 <button onclick="undo()">戻る</button>
@@ -143,26 +122,64 @@ padding:6px;
 
 </div>
 
-<script>
+<script type="module">
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js"
+import { getFirestore,doc,setDoc,onSnapshot,getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js"
+
+const firebaseConfig={
+apiKey:"AIzaSyBmvXnvy1ttB8QllcCcm6eW2ZV7Qg-ZFW4",
+authDomain:"pcoa-plan.firebaseapp.com",
+projectId:"pcoa-plan",
+storageBucket:"pcoa-plan.firebasestorage.app",
+messagingSenderId:"121585105198",
+appId:"1:121585105198:web:4fe893ae9be81ba23822bf"
+}
+
+const app=initializeApp(firebaseConfig)
+const db=getFirestore(app)
+
+const iconRef=doc(db,"board","icons")
+const lineRef=doc(db,"board","lines")
 
 const board=document.getElementById("board")
 
-function spawn(char,type){
+/* アイコン生成 */
+
+window.spawn=function(char,type){
 
 let icon=document.createElement("div")
+
 icon.className="icon "+type
 icon.innerText=char
 icon.style.left="200px"
 icon.style.top="200px"
 
 board.appendChild(icon)
+
 drag(icon)
-  
-saveState()
+
+saveIcons()
 
 }
 
+/* 右クリック削除 */
+
+function enableDelete(icon){
+
+icon.addEventListener("contextmenu",e=>{
+e.preventDefault()
+icon.remove()
+saveIcons()
+})
+
+}
+
+/* ドラッグ */
+
 function drag(el){
+
+enableDelete(el)
 
 let offsetX,offsetY
 
@@ -198,122 +215,15 @@ function end(){
 document.onmousemove=null
 document.ontouchmove=null
 
-saveState()
+saveIcons()
 
 }
 
 }
 
-/* ===== CANVAS ===== */
+/* 保存 */
 
-let canvas=document.getElementById("draw")
-let ctx=canvas.getContext("2d")
-
-function resize(){
-
-canvas.width=board.clientWidth
-canvas.height=board.clientHeight
-
-}
-
-window.onresize=resize
-resize()
-
-let drawing=false
-let startX,startY
-let mode="line"
-let history=[]
-
-canvas.onmousedown=e=>{
-
-drawing=true
-startX=e.offsetX
-startY=e.offsetY
-
-}
-
-canvas.onmouseup=e=>{
-
-if(!drawing) return
-drawing=false
-
-history.push(ctx.getImageData(0,0,canvas.width,canvas.height))
-
-ctx.strokeStyle="red"
-ctx.lineWidth=4
-
-ctx.beginPath()
-ctx.moveTo(startX,startY)
-ctx.lineTo(e.offsetX,e.offsetY)
-ctx.stroke()
-
-if(mode==="arrow"){
-
-let angle=Math.atan2(e.offsetY-startY,e.offsetX-startX)
-
-ctx.beginPath()
-ctx.moveTo(e.offsetX,e.offsetY)
-ctx.lineTo(e.offsetX-15*Math.cos(angle-0.5),e.offsetY-15*Math.sin(angle-0.5))
-ctx.lineTo(e.offsetX-15*Math.cos(angle+0.5),e.offsetY-15*Math.sin(angle+0.5))
-ctx.closePath()
-ctx.fillStyle="red"
-ctx.fill()
-
-}
-
-}
-
-function undo(){
-
-if(history.length>0){
-ctx.putImageData(history.pop(),0,0)
-}
-
-}
-
-function clearDraw(){
-
-ctx.clearRect(0,0,canvas.width,canvas.height)
-history=[]
-
-}
-
-document.getElementById("mapSelect").onchange=e=>{
-document.getElementById("map").src=e.target.value
-}
-
-/* ===== スマホピンチズーム ===== */
-
-let scale=1
-
-board.addEventListener("wheel",e=>{
-e.preventDefault()
-scale+=e.deltaY*-0.001
-scale=Math.min(Math.max(.5,scale),3)
-board.style.transform=`scale(${scale})`
-})
-
-</script>
-<script type="module">
-
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-
-const firebaseConfig = {
-apiKey: "AIzaSyBmvXnvy1ttB8QllcCcm6eW2ZV7Qg-ZFW4",
-authDomain: "pcoa-plan.firebaseapp.com",
-projectId: "pcoa-plan",
-storageBucket: "pcoa-plan.firebasestorage.app",
-messagingSenderId: "121585105198",
-appId: "1:121585105198:web:4fe893ae9be81ba23822bf"
-};
-
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-
-const room = doc(db,"boards","main");
-
-function saveState(){
+async function saveIcons(){
 
 let icons=[]
 
@@ -328,17 +238,19 @@ y:i.style.top
 
 })
 
-setDoc(room,{icons})
+setDoc(iconRef,{icons})
 
 }
 
-onSnapshot(room,(doc)=>{
+/* 受信 */
 
-if(!doc.exists()) return
+onSnapshot(iconRef,(snap)=>{
+
+if(!snap.exists())return
 
 document.querySelectorAll(".icon").forEach(i=>i.remove())
 
-doc.data().icons.forEach(data=>{
+snap.data().icons.forEach(data=>{
 
 let icon=document.createElement("div")
 
@@ -347,7 +259,7 @@ icon.innerText=data.text
 icon.style.left=data.x
 icon.style.top=data.y
 
-document.getElementById("board").appendChild(icon)
+board.appendChild(icon)
 
 drag(icon)
 
@@ -355,8 +267,148 @@ drag(icon)
 
 })
 
-window.saveState=saveState
+/* canvas */
+
+const canvas=document.getElementById("draw")
+const ctx=canvas.getContext("2d")
+
+function resize(){
+
+canvas.width=board.clientWidth
+canvas.height=board.clientHeight
+
+}
+
+window.onresize=resize
+resize()
+
+let drawing=false
+let startX,startY
+let mode="line"
+
+canvas.onmousedown=e=>{
+
+drawing=true
+startX=e.offsetX
+startY=e.offsetY
+
+}
+
+canvas.onmouseup=e=>{
+
+if(!drawing)return
+drawing=false
+
+let line={
+x1:startX,
+y1:startY,
+x2:e.offsetX,
+y2:e.offsetY,
+mode:mode
+}
+
+saveLine(line)
+
+}
+
+async function saveLine(line){
+
+let data={lines:[]}
+
+const snap=await getDoc(lineRef)
+
+if(snap.exists())data=snap.data()
+
+data.lines.push(line)
+
+setDoc(lineRef,data)
+
+}
+
+onSnapshot(lineRef,(snap)=>{
+
+if(!snap.exists())return
+
+ctx.clearRect(0,0,canvas.width,canvas.height)
+
+snap.data().lines.forEach(l=>{
+
+ctx.beginPath()
+ctx.moveTo(l.x1,l.y1)
+ctx.lineTo(l.x2,l.y2)
+ctx.strokeStyle="red"
+ctx.lineWidth=4
+ctx.stroke()
+
+if(l.mode==="arrow"){
+
+let angle=Math.atan2(l.y2-l.y1,l.x2-l.x1)
+
+ctx.beginPath()
+ctx.moveTo(l.x2,l.y2)
+ctx.lineTo(l.x2-15*Math.cos(angle-0.5),l.y2-15*Math.sin(angle-0.5))
+ctx.lineTo(l.x2-15*Math.cos(angle+0.5),l.y2-15*Math.sin(angle+0.5))
+ctx.fillStyle="red"
+ctx.fill()
+
+}
+
+})
+
+})
+
+/* ズーム */
+
+let scale=1
+
+board.addEventListener("wheel",e=>{
+
+e.preventDefault()
+
+scale+=e.deltaY*-0.001
+scale=Math.min(Math.max(.5,scale),3)
+
+document.getElementById("map").style.transform=`scale(${scale})`
+
+})
+
+/* スマホピンチズーム */
+
+let startDist=0
+
+board.addEventListener("touchstart",e=>{
+
+if(e.touches.length==2){
+
+startDist=Math.hypot(
+e.touches[0].clientX-e.touches[1].clientX,
+e.touches[0].clientY-e.touches[1].clientY)
+
+}
+
+})
+
+board.addEventListener("touchmove",e=>{
+
+if(e.touches.length==2){
+
+let newDist=Math.hypot(
+e.touches[0].clientX-e.touches[1].clientX,
+e.touches[0].clientY-e.touches[1].clientY)
+
+scale*=newDist/startDist
+
+scale=Math.min(Math.max(.5,scale),3)
+
+document.getElementById("map").style.transform=`scale(${scale})`
+
+startDist=newDist
+
+}
+
+})
 
 </script>
+
 </body>
 </html>
