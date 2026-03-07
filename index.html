@@ -1,0 +1,212 @@
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PCOA FiveM 作戦ボード V10</title>
+
+<style>
+body{margin:0;font-family:sans-serif;background:#111;color:white;display:flex;height:100vh;overflow:hidden;}
+#left{width:230px;background:#1a1a1a;padding:10px;overflow:auto;}
+.player{background:#2b2b2b;padding:7px;margin:4px 0;border-radius:6px;cursor:pointer;}
+#board{flex:1;position:relative;overflow:hidden;}
+#map{width:100%;height:100%;object-fit:cover;}
+.icon{position:absolute;width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;color:white;cursor:grab;}
+.police{background:#3498db;}
+.gang{background:#e74c3c;}
+.merc{background:#9b59b6;}
+#top{position:absolute;top:10px;left:250px;z-index:10;}
+button{margin:2px;padding:6px;}
+canvas{position:absolute;top:0;left:0;}
+</style>
+</head>
+
+<body>
+
+<div id="left">
+
+<h3>警察</h3>
+<div class="player" onclick="spawn('警','police')">警察①</div>
+<div class="player" onclick="spawn('警','police')">警察②</div>
+<div class="player" onclick="spawn('警','police')">警察③</div>
+<div class="player" onclick="spawn('警','police')">警察④</div>
+
+<h3>ギャング</h3>
+<div class="player" onclick="spawn('七','gang')">七海のあ</div>
+<div class="player" onclick="spawn('禿','gang')">蒼瀬こあ</div>
+<div class="player" onclick="spawn('狼','gang')">白影潤羽</div>
+<div class="player" onclick="spawn('獅','gang')">獅子蓮夢生</div>
+<div class="player" onclick="spawn('犬','gang')">只野なち</div>
+<div class="player" onclick="spawn('兎','gang')">兎月羅依</div>
+<div class="player" onclick="spawn('嬢','gang')">雛子丸びこち</div>
+<div class="player" onclick="spawn('牛','gang')">奇美羅ぬい仔</div>
+<div class="player" onclick="spawn('猫','gang')">猫宮すい</div>
+<div class="player" onclick="spawn('ゼ','gang')">古賀ゼン</div>
+<div class="player" onclick="spawn('華','gang')">風槻華音</div>
+<div class="player" onclick="spawn('雷','gang')">雷導新羅</div>
+
+<h3>傭兵</h3>
+<div class="player" onclick="spawn('澪','merc')">神楽澪</div>
+<div class="player" onclick="spawn('弟','merc')">桃井そら</div>
+
+</div>
+
+<div id="board">
+
+<img id="map" src="bobcat.jpg">
+
+<canvas id="draw"></canvas>
+
+<div id="top">
+
+<select id="mapSelect">
+<option value="bobcat.jpg">ボブキャット</option>
+<option value="military.jpg">軍事基地</option>
+<option value="airport.jpg">飛行場</option>
+<option value="ship.jpg">客船</option>
+<option value="artifact.jpg">アーティファクト</option>
+<option value="union.jpg">ユニオン</option>
+<option value="humane.jpg">ヒューメイン</option>
+<option value="pacific.jpg">パシフィック</option>
+</select>
+<br>
+
+<button onclick="mode='line'">線</button>
+<button onclick="mode='arrow'">矢印</button>
+<button onclick="undo()">Undo</button>
+<button onclick="clearDraw()">削除</button>
+
+</div>
+
+</div>
+
+<script>
+
+const board=document.getElementById("board")
+
+function spawn(char,type){
+
+let icon=document.createElement("div")
+icon.className="icon "+type
+icon.innerText=char
+icon.style.left="200px"
+icon.style.top="200px"
+
+board.appendChild(icon)
+drag(icon)
+
+}
+
+function drag(el){
+
+let offsetX,offsetY
+
+el.onmousedown=e=>{
+
+offsetX=e.clientX-el.offsetLeft
+offsetY=e.clientY-el.offsetTop
+
+document.onmousemove=move
+
+}
+
+function move(e){
+
+el.style.left=e.clientX-offsetX+"px"
+el.style.top=e.clientY-offsetY+"px"
+
+}
+
+document.onmouseup=()=>{
+
+document.onmousemove=null
+
+}
+
+}
+
+let canvas=document.getElementById("draw")
+let ctx=canvas.getContext("2d")
+
+function resize(){
+
+canvas.width=board.clientWidth
+canvas.height=board.clientHeight
+
+}
+
+window.onresize=resize
+resize()
+
+let drawing=false
+let startX,startY
+let mode="line"
+let history=[]
+
+canvas.onmousedown=e=>{
+
+drawing=true
+startX=e.offsetX
+startY=e.offsetY
+
+}
+
+canvas.onmouseup=e=>{
+
+if(!drawing) return
+drawing=false
+
+history.push(ctx.getImageData(0,0,canvas.width,canvas.height))
+
+ctx.strokeStyle="red"
+ctx.lineWidth=4
+
+ctx.beginPath()
+ctx.moveTo(startX,startY)
+ctx.lineTo(e.offsetX,e.offsetY)
+ctx.stroke()
+
+if(mode==="arrow"){
+
+let angle=Math.atan2(e.offsetY-startY,e.offsetX-startX)
+
+ctx.beginPath()
+ctx.moveTo(e.offsetX,e.offsetY)
+ctx.lineTo(e.offsetX-15*Math.cos(angle-0.5),e.offsetY-15*Math.sin(angle-0.5))
+ctx.lineTo(e.offsetX-15*Math.cos(angle+0.5),e.offsetY-15*Math.sin(angle+0.5))
+ctx.closePath()
+ctx.fillStyle="red"
+ctx.fill()
+
+}
+
+}
+
+function undo(){
+
+if(history.length>0){
+
+ctx.putImageData(history.pop(),0,0)
+
+}
+
+}
+
+function clearDraw(){
+
+ctx.clearRect(0,0,canvas.width,canvas.height)
+history=[]
+
+}
+
+document.getElementById("mapSelect").onchange=e=>{
+
+document.getElementById("map").src=e.target.value
+
+}
+
+</script>
+
+</body>
+</html>
