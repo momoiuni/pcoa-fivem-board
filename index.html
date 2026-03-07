@@ -412,8 +412,6 @@ e.preventDefault()
 scale += e.deltaY * -0.001
 scale = Math.min(Math.max(.5,scale),3)
 
-applyZoom()
-
 })
 
 /* スマホピンチズーム */
@@ -444,8 +442,6 @@ e.touches[0].clientY - e.touches[1].clientY
 
 scale *= newDist / startDist
 scale = Math.min(Math.max(.5,scale),3)
-
-applyZoom()
 
 startDist = newDist
 
@@ -493,8 +489,8 @@ document.getElementById("map").src=e.target.value
 let panX = 0
 let panY = 0
 let isPanning = false
-let startX = 0
-let startY = 0
+let panStartX = 0
+let panStartY = 0
 
 function applyTransform(){
 
@@ -513,8 +509,8 @@ board.addEventListener("mousedown",e=>{
 if(e.target.classList.contains("icon")) return
 
 isPanning = true
-startX = e.clientX - panX
-startY = e.clientY - panY
+panStartX = e.clientX - panX
+panStartY = e.clientY - panY
 
 })
 
@@ -522,8 +518,8 @@ document.addEventListener("mousemove",e=>{
 
 if(!isPanning) return
 
-panX = e.clientX - startX
-panY = e.clientY - startY
+panX = e.clientX - panStartX
+panY = e.clientY - panStartY
 
 applyTransform()
 
@@ -543,8 +539,8 @@ if(e.touches.length==1){
 
 isPanning=true
 
-startX = e.touches[0].clientX - panX
-startY = e.touches[0].clientY - panY
+panX = e.touches[0].clientX - panStartX
+panY = e.touches[0].clientY - panStartY
 
 }
 
@@ -554,8 +550,8 @@ board.addEventListener("touchmove",e=>{
 
 if(!isPanning) return
 
-panX = e.touches[0].clientX - startX
-panY = e.touches[0].clientY - startY
+panX = e.touches[0].clientX - panStartX
+panY = e.touches[0].clientY - panStartY
 
 applyTransform()
 
