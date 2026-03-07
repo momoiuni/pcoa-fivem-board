@@ -157,6 +157,8 @@ icon.style.top="200px"
 
 board.appendChild(icon)
 drag(icon)
+  
+saveState()
 
 }
 
@@ -164,25 +166,39 @@ function drag(el){
 
 let offsetX,offsetY
 
-el.onmousedown=e=>{
+el.onmousedown=start
+el.ontouchstart=start
 
-offsetX=e.clientX-el.offsetLeft
-offsetY=e.clientY-el.offsetTop
+function start(e){
+
+let touch=e.touches?e.touches[0]:e
+
+offsetX=touch.clientX-el.offsetLeft
+offsetY=touch.clientY-el.offsetTop
 
 document.onmousemove=move
+document.ontouchmove=move
 
 }
 
 function move(e){
 
-el.style.left=e.clientX-offsetX+"px"
-el.style.top=e.clientY-offsetY+"px"
+let touch=e.touches?e.touches[0]:e
+
+el.style.left=touch.clientX-offsetX+"px"
+el.style.top=touch.clientY-offsetY+"px"
 
 }
 
-document.onmouseup=()=>{
+document.onmouseup=end
+document.ontouchend=end
+
+function end(){
 
 document.onmousemove=null
+document.ontouchmove=null
+
+saveState()
 
 }
 
@@ -278,6 +294,69 @@ board.style.transform=`scale(${scale})`
 })
 
 </script>
+<script type="module">
 
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+const firebaseConfig = {
+apiKey: "AIzaSyBmvXnvy1ttB8QllcCcm6eW2ZV7Qg-ZFW4",
+authDomain: "pcoa-plan.firebaseapp.com",
+projectId: "pcoa-plan",
+storageBucket: "pcoa-plan.firebasestorage.app",
+messagingSenderId: "121585105198",
+appId: "1:121585105198:web:4fe893ae9be81ba23822bf"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+const room = doc(db,"boards","main");
+
+function saveState(){
+
+let icons=[]
+
+document.querySelectorAll(".icon").forEach(i=>{
+
+icons.push({
+text:i.innerText,
+class:i.className,
+x:i.style.left,
+y:i.style.top
+})
+
+})
+
+setDoc(room,{icons})
+
+}
+
+onSnapshot(room,(doc)=>{
+
+if(!doc.exists()) return
+
+document.querySelectorAll(".icon").forEach(i=>i.remove())
+
+doc.data().icons.forEach(data=>{
+
+let icon=document.createElement("div")
+
+icon.className=data.class
+icon.innerText=data.text
+icon.style.left=data.x
+icon.style.top=data.y
+
+document.getElementById("board").appendChild(icon)
+
+drag(icon)
+
+})
+
+})
+
+window.saveState=saveState
+
+</script>
 </body>
 </html>
