@@ -37,6 +37,7 @@ flex:1;
 position:relative;
 overflow:hidden;
 touch-action:none;
+cursor:grab;
 }
 
 #map{
@@ -484,6 +485,90 @@ await setDoc(lineRef,data)
 document.getElementById("mapSelect").addEventListener("change",e=>{
 
 document.getElementById("map").src=e.target.value
+
+})
+
+  /* マップパン */
+
+let panX = 0
+let panY = 0
+let isPanning = false
+let startX = 0
+let startY = 0
+
+function applyTransform(){
+
+document.getElementById("map").style.transform =
+`translate(${panX}px,${panY}px) scale(${scale})`
+
+canvas.style.transform =
+`translate(${panX}px,${panY}px) scale(${scale})`
+
+document.querySelectorAll(".icon").forEach(icon=>{
+icon.style.transform =
+`translate(${panX}px,${panY}px) scale(${scale})`
+})
+
+}
+
+/* PCドラッグ */
+
+board.addEventListener("mousedown",e=>{
+
+if(e.target.classList.contains("icon")) return
+
+isPanning = true
+startX = e.clientX - panX
+startY = e.clientY - panY
+
+})
+
+document.addEventListener("mousemove",e=>{
+
+if(!isPanning) return
+
+panX = e.clientX - startX
+panY = e.clientY - startY
+
+applyTransform()
+
+})
+
+document.addEventListener("mouseup",()=>{
+
+isPanning = false
+
+})
+
+/* スマホドラッグ */
+
+board.addEventListener("touchstart",e=>{
+
+if(e.touches.length==1){
+
+isPanning=true
+
+startX = e.touches[0].clientX - panX
+startY = e.touches[0].clientY - panY
+
+}
+
+})
+
+board.addEventListener("touchmove",e=>{
+
+if(!isPanning) return
+
+panX = e.touches[0].clientX - startX
+panY = e.touches[0].clientY - startY
+
+applyTransform()
+
+})
+
+board.addEventListener("touchend",()=>{
+
+isPanning=false
 
 })
 
