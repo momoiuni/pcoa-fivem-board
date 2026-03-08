@@ -1,58 +1,89 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>FiveM Tactical Board v3</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FiveM 最強作戦ボード v3.1</title>
 
 <style>
 
 body{
 margin:0;
-overflow:hidden;
 font-family:sans-serif;
 background:#111;
 color:white;
+display:flex;
+height:100vh;
+overflow:hidden;
 }
 
-#toolbar{
-position:fixed;
-top:0;
-left:0;
-width:100%;
-background:#222;
-padding:6px;
-z-index:1000;
+#left{
+width:220px;
+background:#1a1a1a;
+padding:10px;
+overflow:auto;
 }
 
-button,select{
-margin-right:6px;
+.player{
+background:#2b2b2b;
+padding:7px;
+margin:4px 0;
+border-radius:6px;
+cursor:pointer;
 }
 
 #board{
-position:absolute;
-top:40px;
-left:0;
-transform-origin:0 0;
+flex:1;
+position:relative;
+overflow:hidden;
+touch-action:none;
 }
 
 #map{
 position:absolute;
-top:0;
-left:0;
-user-select:none;
-pointer-events:none;
+width:100%;
+height:100%;
+object-fit:cover;
+z-index:1;
+transform-origin:0 0;
 }
 
-#draw{
+canvas{
 position:absolute;
 top:0;
 left:0;
+z-index:2;
+transform-origin:0 0;
 }
 
 .icon{
 position:absolute;
-font-size:24px;
-cursor:pointer;
+width:42px;
+height:42px;
+border-radius:50%;
+display:flex;
+align-items:center;
+justify-content:center;
+font-weight:bold;
+color:white;
+cursor:grab;
+z-index:3;
+}
+
+.police{background:#3498db;}
+.gang{background:#e74c3c;}
+.merc{background:#9b59b6;}
+
+#top{
+position:absolute;
+top:10px;
+left:240px;
+z-index:4;
+}
+
+button{
+margin:2px;
+padding:6px;
 }
 
 </style>
@@ -60,333 +91,290 @@ cursor:pointer;
 
 <body>
 
-<div id="toolbar">
+<!-- 左メンバー -->
+<div id="left">
 
-<select id="mapSelect">
-<option value="bobcat.jpg">bobcat</option>
-<option value="union.jpg">union</option>
-<option value="military.jpg">military</option>
-<option value="airport.jpg">airport</option>
-<option value="humane.jpg">humane</option>
-<option value="pacific.jpg">pacific</option>
-<option value="ship.jpg">ship</option>
-</select>
+<h3>警察</h3>
+<div class="player" onclick="spawn('警','police')">警察</div>
 
-<button onclick="mode='draw'">線</button>
-<button onclick="mode='arrow'">矢印</button>
-<button onclick="spawnPin()">ピン</button>
+<h3>ギャング</h3>
+<div class="player" onclick="spawn('七','gang')">七海のあ</div>
+<div class="player" onclick="spawn('禿','gang')">蒼瀬こあ</div>
+<div class="player" onclick="spawn('狼','gang')">白影潤羽</div>
+<div class="player" onclick="spawn('獅','gang')">獅子蓮夢生</div>
+<div class="player" onclick="spawn('犬','gang')">只野なち</div>
+<div class="player" onclick="spawn('兎','gang')">兎月羅依</div>
+<div class="player" onclick="spawn('嬢','gang')">雛子丸びこち</div>
+<div class="player" onclick="spawn('牛','gang')">奇美羅ぬい仔</div>
+<div class="player" onclick="spawn('猫','gang')">猫宮すい</div>
+<div class="player" onclick="spawn('ゼ','gang')">古賀ゼン</div>
+<div class="player" onclick="spawn('華','gang')">風槻華音</div>
+<div class="player" onclick="spawn('雷','gang')">雷導新羅</div>
+
+<h3>傭兵</h3>
+<div class="player" onclick="spawn('澪','merc')">神楽澪</div>
+<div class="player" onclick="spawn('弟','merc')">桃井そら</div>
 
 </div>
 
+<!-- マップ -->
 <div id="board">
 
 <img id="map" src="bobcat.jpg">
 
 <canvas id="draw"></canvas>
 
+<div id="top">
+
+<select id="mapSelect">
+<option value="bobcat.jpg">ボブキャット</option>
+<option value="union.jpg">ユニオン</option>
+<option value="military.jpg">軍事基地</option>
+<option value="airport.jpg">飛行場</option>
+<option value="humane.jpg">ヒューメイン</option>
+<option value="pacific.jpg">パシフィック</option>
+<option value="ship.jpg">客船</option>
+</select>
+
+<br>
+
+<button onclick="mode='draw'">線</button>
+<button onclick="mode='arrow'">矢印</button>
+<button onclick="spawnPin()">ピン</button>
+<button onclick="undo()">戻る</button>
+<button onclick="clearDraw()">削除</button>
+
 </div>
 
+</div>
 
 <script type="module">
 
-/* ---------------------------
-Firebase設定
---------------------------- */
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js"
+import { getFirestore,doc,setDoc,onSnapshot,getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js"
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js"
-import { getFirestore,doc,setDoc,onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"
-
-const firebaseConfig = {
-
+const firebaseConfig={
 apiKey:"AIzaSyBmvXnvy1ttB8QllcCcm6eW2ZV7Qg-ZFW4",
 authDomain:"pcoa-plan.firebaseapp.com",
-projectId:"coa-plan",
-
+projectId:"pcoa-plan",
+storageBucket:"pcoa-plan.firebasestorage.app",
+messagingSenderId:"121585105198",
+appId:"1:121585105198:web:4fe893ae9be81ba23822bf"
 }
 
-const app = initializeApp(firebaseConfig)
-const db = getFirestore(app)
+const app=initializeApp(firebaseConfig)
+const db=getFirestore(app)
 
-const ref = doc(db,"board","data")
+const params=new URLSearchParams(location.search)
+const room=params.get("room") || "main"
 
+const iconRef=doc(db,"boards",room+"_icons")
+const lineRef=doc(db,"boards",room+"_lines")
 
-/* ---------------------------
-Canvas
---------------------------- */
-
+const board=document.getElementById("board")
 const canvas=document.getElementById("draw")
 const ctx=canvas.getContext("2d")
 
-canvas.width=3000
-canvas.height=3000
-
-
-/* ---------------------------
-Zoom / Pan
---------------------------- */
-
-const board=document.getElementById("board")
-
-let scale=1
-let panX=0
-let panY=0
-
-function updateTransform(){
-
-board.style.transform=
-`translate(${panX}px,${panY}px) scale(${scale})`
-
+function resize(){
+canvas.width=board.clientWidth
+canvas.height=board.clientHeight
 }
+window.onresize=resize
+resize()
 
-/* zoom */
+/* アイコン生成 */
 
-board.addEventListener("wheel",e=>{
-
-e.preventDefault()
-
-const rect=board.getBoundingClientRect()
-
-const mouseX=e.clientX-rect.left
-const mouseY=e.clientY-rect.top
-
-const zoom=e.deltaY<0?1.1:0.9
-
-panX -= (mouseX-panX)*(zoom-1)
-panY -= (mouseY-panY)*(zoom-1)
-
-scale*=zoom
-
-updateTransform()
-
-})
-
-/* pan */
-
-let space=false
-let panning=false
-let startX,startY
-
-document.addEventListener("keydown",e=>{
-if(e.code==="Space")space=true
-})
-
-document.addEventListener("keyup",e=>{
-if(e.code==="Space")space=false
-})
-
-board.addEventListener("mousedown",e=>{
-
-if(!space)return
-
-panning=true
-
-startX=e.clientX-panX
-startY=e.clientY-panY
-
-})
-
-document.addEventListener("mousemove",e=>{
-
-if(!panning)return
-
-panX=e.clientX-startX
-panY=e.clientY-startY
-
-updateTransform()
-
-})
-
-document.addEventListener("mouseup",()=>{
-
-panning=false
-
-})
-
-/* ---------------------------
-Drawing
---------------------------- */
-
-let mode="draw"
-let drawing=false
-let line=[]
-
-canvas.addEventListener("mousedown",e=>{
-
-if(space)return
-
-drawing=true
-
-line=[pos(e)]
-
-})
-
-canvas.addEventListener("mousemove",e=>{
-
-if(!drawing)return
-
-let p=pos(e)
-
-line.push(p)
-
-ctx.beginPath()
-
-let prev=line[line.length-2]
-
-ctx.moveTo(prev.x,prev.y)
-ctx.lineTo(p.x,p.y)
-
-ctx.lineWidth=4
-ctx.strokeStyle="red"
-ctx.stroke()
-
-})
-
-canvas.addEventListener("mouseup",e=>{
-
-if(!drawing)return
-
-drawing=false
-
-if(mode==="arrow"){
-
-let a=line[0]
-let b=line[line.length-1]
-
-save({
-
-mode:"arrow",
-x1:a.x,y1:a.y,
-x2:b.x,y2:b.y
-
-})
-
-}else{
-
-save({
-
-mode:"draw",
-points:line
-
-})
-
-}
-
-})
-
-function pos(e){
-
-const rect=canvas.getBoundingClientRect()
-
-return{
-
-x:(e.clientX-rect.left)/scale,
-y:(e.clientY-rect.top)/scale
-
-}
-
-}
-
-/* ---------------------------
-Icons
---------------------------- */
-
-window.spawnPin=function(){
+window.spawn=function(char,type){
 
 let icon=document.createElement("div")
-
-icon.className="icon"
-icon.innerText="📍"
-
-icon.style.left="500px"
-icon.style.top="500px"
+icon.className="icon "+type
+icon.innerText=char
+icon.style.left="200px"
+icon.style.top="200px"
 
 board.appendChild(icon)
 
 drag(icon)
+saveIcons()
 
 }
 
+window.spawnPin=function(){
+
+let icon=document.createElement("div")
+icon.className="icon"
+icon.innerText="📍"
+icon.style.left="300px"
+icon.style.top="300px"
+
+board.appendChild(icon)
+
+drag(icon)
+saveIcons()
+
+}
+
+/* ドラッグ */
+
 function drag(el){
 
-let ox,oy
+el.oncontextmenu=e=>{
+e.preventDefault()
+el.remove()
+saveIcons()
+}
+
+let offsetX,offsetY
 
 el.onmousedown=e=>{
-
-e.stopPropagation()
-
-ox=e.offsetX
-oy=e.offsetY
+offsetX=e.offsetX
+offsetY=e.offsetY
 
 document.onmousemove=move
-document.onmouseup=stop
-
+document.onmouseup=end
 }
 
 function move(e){
 
-let x=(e.clientX-board.getBoundingClientRect().left-panX)/scale-ox
-let y=(e.clientY-board.getBoundingClientRect().top-panY)/scale-oy
+let x=(e.clientX-board.getBoundingClientRect().left-panX)/scale-offsetX
+let y=(e.clientY-board.getBoundingClientRect().top-panY)/scale-offsetY
 
 el.style.left=x+"px"
 el.style.top=y+"px"
 
 }
 
-function stop(){
-
+function end(){
 document.onmousemove=null
-
-}
-
-el.oncontextmenu=e=>{
-
-e.preventDefault()
-
-el.remove()
-
+saveIcons()
 }
 
 }
 
-/* ---------------------------
-Save
---------------------------- */
+/* アイコン保存 */
 
-let lines=[]
+async function saveIcons(){
 
-async function save(l){
+let icons=[]
 
-lines.push(l)
+document.querySelectorAll(".icon").forEach(i=>{
+icons.push({
+text:i.innerText,
+class:i.className,
+x:i.style.left,
+y:i.style.top
+})
+})
 
-await setDoc(ref,{lines})
+setDoc(iconRef,{icons})
 
 }
 
-/* ---------------------------
-Realtime
---------------------------- */
+/* アイコン受信 */
 
-onSnapshot(ref,s=>{
+onSnapshot(iconRef,snap=>{
 
-if(!s.exists())return
+if(!snap.exists())return
+
+document.querySelectorAll(".icon").forEach(i=>i.remove())
+
+snap.data().icons.forEach(data=>{
+
+let icon=document.createElement("div")
+icon.className=data.class
+icon.innerText=data.text
+icon.style.left=data.x
+icon.style.top=data.y
+
+board.appendChild(icon)
+drag(icon)
+
+})
+
+})
+
+/* 描画 */
+
+let drawing=false
+let points=[]
+let mode="draw"
+
+canvas.onmousedown=e=>{
+drawing=true
+points=[{x:e.offsetX,y:e.offsetY}]
+}
+
+canvas.onmousemove=e=>{
+
+if(!drawing || mode!=="draw") return
+
+let p={x:e.offsetX,y:e.offsetY}
+points.push(p)
+
+ctx.beginPath()
+ctx.moveTo(points[points.length-2].x,points[points.length-2].y)
+ctx.lineTo(p.x,p.y)
+ctx.strokeStyle="red"
+ctx.lineWidth=4
+ctx.stroke()
+
+}
+
+canvas.onmouseup=e=>{
+
+if(!drawing) return
+drawing=false
+
+if(mode==="arrow"){
+
+saveLine({
+mode:"arrow",
+x1:points[0].x,
+y1:points[0].y,
+x2:e.offsetX,
+y2:e.offsetY
+})
+
+}else{
+
+saveLine({mode:"draw",points})
+
+}
+
+}
+
+async function saveLine(line){
+
+let data={lines:[]}
+const snap=await getDoc(lineRef)
+
+if(snap.exists()) data=snap.data()
+
+data.lines.push(line)
+
+setDoc(lineRef,data)
+
+}
+
+onSnapshot(lineRef,snap=>{
+
+if(!snap.exists()) return
 
 ctx.clearRect(0,0,canvas.width,canvas.height)
 
-s.data().lines.forEach(l=>{
+snap.data().lines.forEach(l=>{
 
 if(l.mode==="draw"){
 
 ctx.beginPath()
 
 l.points.forEach((p,i)=>{
-
-if(i===0)ctx.moveTo(p.x,p.y)
+if(i==0) ctx.moveTo(p.x,p.y)
 else ctx.lineTo(p.x,p.y)
-
 })
 
-ctx.lineWidth=4
 ctx.strokeStyle="red"
+ctx.lineWidth=4
 ctx.stroke()
 
 }
@@ -398,14 +386,12 @@ ctx.moveTo(l.x1,l.y1)
 ctx.lineTo(l.x2,l.y2)
 ctx.stroke()
 
-let angle=Math.atan2(l.y2-l.y1,l.x2-l.x1)
+let a=Math.atan2(l.y2-l.y1,l.x2-l.x1)
 
 ctx.beginPath()
-
 ctx.moveTo(l.x2,l.y2)
-ctx.lineTo(l.x2-15*Math.cos(angle-0.5),l.y2-15*Math.sin(angle-0.5))
-ctx.lineTo(l.x2-15*Math.cos(angle+0.5),l.y2-15*Math.sin(angle+0.5))
-
+ctx.lineTo(l.x2-15*Math.cos(a-0.5),l.y2-15*Math.sin(a-0.5))
+ctx.lineTo(l.x2-15*Math.cos(a+0.5),l.y2-15*Math.sin(a+0.5))
 ctx.fillStyle="red"
 ctx.fill()
 
@@ -415,16 +401,111 @@ ctx.fill()
 
 })
 
+/* ズーム */
 
-/* ---------------------------
-Map change
---------------------------- */
+let scale=1
+let panX=0
+let panY=0
 
-document.getElementById("mapSelect").onchange=e=>{
+board.addEventListener("wheel",e=>{
 
-document.getElementById("map").src=e.target.value
+e.preventDefault()
+
+const rect=board.getBoundingClientRect()
+
+const mx=e.clientX-rect.left
+const my=e.clientY-rect.top
+
+const zoom=e.deltaY<0?1.1:0.9
+
+panX -= (mx-panX)*(zoom-1)
+panY -= (my-panY)*(zoom-1)
+
+scale*=zoom
+
+applyTransform()
+
+})
+
+function applyTransform(){
+
+document.getElementById("map").style.transform=
+`translate(${panX}px,${panY}px) scale(${scale})`
+
+canvas.style.transform=
+`translate(${panX}px,${panY}px) scale(${scale})`
 
 }
+
+/* spaceパン */
+
+let space=false
+let panning=false
+let sx,sy
+
+document.addEventListener("keydown",e=>{
+if(e.code==="Space") space=true
+})
+
+document.addEventListener("keyup",e=>{
+if(e.code==="Space") space=false
+})
+
+board.addEventListener("mousedown",e=>{
+
+if(!space) return
+
+panning=true
+sx=e.clientX-panX
+sy=e.clientY-panY
+
+})
+
+document.addEventListener("mousemove",e=>{
+
+if(!panning) return
+
+panX=e.clientX-sx
+panY=e.clientY-sy
+
+applyTransform()
+
+})
+
+document.addEventListener("mouseup",()=>{
+
+panning=false
+
+})
+
+/* undo */
+
+window.undo=async function(){
+
+const snap=await getDoc(lineRef)
+if(!snap.exists())return
+
+let data=snap.data()
+data.lines.pop()
+
+setDoc(lineRef,data)
+
+}
+
+/* clear */
+
+window.clearDraw=async function(){
+
+ctx.clearRect(0,0,canvas.width,canvas.height)
+setDoc(lineRef,{lines:[]})
+
+}
+
+/* map change */
+
+document.getElementById("mapSelect").addEventListener("change",e=>{
+document.getElementById("map").src=e.target.value
+})
 
 </script>
 
