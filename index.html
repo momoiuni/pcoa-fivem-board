@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FiveM 作戦ボード</title>
+<title>FiveM 作戦ボード v3</title>
 
 <style>
 
@@ -17,8 +17,6 @@ display:flex;
 height:100vh;
 overflow:hidden;
 }
-
-/* 左メニュー */
 
 #left{
 width:220px;
@@ -35,14 +33,11 @@ border-radius:6px;
 cursor:pointer;
 }
 
-/* ボード */
-
 #board{
 flex:1;
 position:relative;
 overflow:hidden;
 touch-action:none;
-cursor:grab;
 }
 
 #map{
@@ -51,6 +46,7 @@ width:100%;
 height:100%;
 object-fit:cover;
 z-index:1;
+transform-origin:0 0;
 }
 
 canvas{
@@ -158,8 +154,6 @@ padding:6px;
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js"
 import { getFirestore,doc,setDoc,onSnapshot,getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js"
 
-/* Firebase */
-
 const firebaseConfig={
 apiKey:"AIzaSyBmvXnvy1ttB8QllcCcm6eW2ZV7Qg-ZFW4",
 authDomain:"pcoa-plan.firebaseapp.com",
@@ -178,12 +172,10 @@ const room=params.get("room") || "main"
 const iconRef=doc(db,"boards",room+"_icons")
 const lineRef=doc(db,"boards",room+"_lines")
 
-/* 基本 */
-
 const board=document.getElementById("board")
-const map=document.getElementById("map")
 const canvas=document.getElementById("draw")
 const ctx=canvas.getContext("2d")
+const map=document.getElementById("map")
 
 let mode="line"
 
@@ -198,8 +190,24 @@ canvas.width=board.clientWidth
 canvas.height=board.clientHeight
 }
 
-window.addEventListener("resize",resize)
 resize()
+window.onresize=resize
+
+/* world convert */
+
+function screenToWorld(x,y){
+return{
+x:(x-view.x)/view.scale,
+y:(y-view.y)/view.scale
+}
+}
+
+function worldToScreen(x,y){
+return{
+x:(x*view.scale)+view.x,
+y:(y*view.scale)+view.y
+}
+}
 
 /* transform */
 
@@ -209,6 +217,9 @@ const t=`translate(${view.x}px,${view.y}px) scale(${view.scale})`
 
 map.style.transform=t
 canvas.style.transform=t
+
+updateIcons()
+updatePins()
 
 }
 
@@ -224,12 +235,13 @@ const mx=e.clientX-rect.left
 const my=e.clientY-rect.top
 
 const zoom=e.deltaY<0?1.1:0.9
+
 const newScale=Math.min(Math.max(view.scale*zoom,0.5),3)
 
-const scaleFactor=newScale/view.scale
+const factor=newScale/view.scale
 
-view.x=mx-(mx-view.x)*scaleFactor
-view.y=my-(my-view.y)*scaleFactor
+view.x=mx-(mx-view.x)*factor
+view.y=my-(my-view.y)*factor
 
 view.scale=newScale
 
@@ -239,18 +251,25 @@ applyTransform()
 
 /* pan */
 
+let space=false
 let panning=false
 let startX,startY
 
+document.addEventListener("keydown",e=>{
+if(e.code==="Space") space=true
+})
+
+document.addEventListener("keyup",e=>{
+if(e.code==="Space") space=false
+})
+
 board.addEventListener("mousedown",e=>{
 
-if(mode==="line"||mode==="arrow") return
-if(e.target.classList.contains("icon")) return
-
+if(space){
 panning=true
-
 startX=e.clientX-view.x
 startY=e.clientY-view.y
+}
 
 })
 
@@ -267,38 +286,23 @@ applyTransform()
 
 document.addEventListener("mouseup",()=>panning=false)
 
-/* draw */
+/* lines */
 
-let drawing=false
-let startX2,startY2
-let preview=null
+let lines=[]
 
 canvas.addEventListener("mousedown",e=>{
 
 if(mode!=="line"&&mode!=="arrow") return
 
+const w=screenToWorld(e.offsetX,e.offsetY)
+
+startLine=w
 drawing=true
 
-startX2=e.offsetX
-startY2=e.offsetY
-
 })
 
-canvas.addEventListener("mousemove",e=>{
-
-if(!drawing) return
-
-preview={
-x1:startX2,
-y1:startY2,
-x2:e.offsetX,
-y2:e.offsetY,
-mode:mode
-}
-
-render()
-
-})
+let drawing=false
+let startLine=null
 
 canvas.addEventListener("mouseup",e=>{
 
@@ -306,63 +310,59 @@ if(!drawing) return
 
 drawing=false
 
+const w=screenToWorld(e.offsetX,e.offsetY)
+
 saveLine({
-x1:startX2,
-y1:startY2,
-x2:e.offsetX,
-y2:e.offsetY,
+x1:startLine.x,
+y1:startLine.y,
+x2:w.x,
+y2:w.y,
 mode:mode
 })
 
-preview=null
-
 })
-
-/* render */
-
-let lines=[]
 
 function render(){
 
 ctx.clearRect(0,0,canvas.width,canvas.height)
 
-function draw(l,color="red"){
+lines.forEach(l=>{
+
+const a=worldToScreen(l.x1,l.y1)
+const b=worldToScreen(l.x2,l.y2)
 
 ctx.beginPath()
-ctx.moveTo(l.x1,l.y1)
-ctx.lineTo(l.x2,l.y2)
-ctx.strokeStyle=color
+ctx.moveTo(a.x,a.y)
+ctx.lineTo(b.x,b.y)
+ctx.strokeStyle="red"
 ctx.lineWidth=4
 ctx.stroke()
 
 if(l.mode==="arrow"){
 
-let angle=Math.atan2(l.y2-l.y1,l.x2-l.x1)
+let angle=Math.atan2(b.y-a.y,b.x-a.x)
 
 ctx.beginPath()
-ctx.moveTo(l.x2,l.y2)
-ctx.lineTo(l.x2-15*Math.cos(angle-0.5),l.y2-15*Math.sin(angle-0.5))
-ctx.lineTo(l.x2-15*Math.cos(angle+0.5),l.y2-15*Math.sin(angle+0.5))
-ctx.fillStyle=color
+ctx.moveTo(b.x,b.y)
+ctx.lineTo(b.x-15*Math.cos(angle-0.5),b.y-15*Math.sin(angle-0.5))
+ctx.lineTo(b.x-15*Math.cos(angle+0.5),b.y-15*Math.sin(angle+0.5))
+ctx.fillStyle="red"
 ctx.fill()
 
 }
 
-}
-
-lines.forEach(l=>draw(l))
-
-if(preview) draw(preview,"orange")
+})
 
 }
 
-/* firebase lines */
+/* firebase */
 
 async function saveLine(line){
 
 let data={lines:[]}
 
 const snap=await getDoc(lineRef)
+
 if(snap.exists()) data=snap.data()
 
 data.lines.push(line)
@@ -390,14 +390,34 @@ let icon=document.createElement("div")
 icon.className="icon "+type
 icon.innerText=char
 
-icon.style.left="200px"
-icon.style.top="200px"
+icon.dataset.x=300
+icon.dataset.y=300
 
 board.appendChild(icon)
 
+enableDelete(icon)
 drag(icon)
 
+updateIcons()
 saveIcons()
+
+}
+
+function updateIcons(){
+
+document.querySelectorAll(".icon").forEach(i=>{
+
+const w={
+x:parseFloat(i.dataset.x),
+y:parseFloat(i.dataset.y)
+}
+
+const s=worldToScreen(w.x,w.y)
+
+i.style.left=s.x+"px"
+i.style.top=s.y+"px"
+
+})
 
 }
 
@@ -407,13 +427,17 @@ let offsetX,offsetY
 
 icon.onmousedown=e=>{
 
-offsetX=e.clientX-icon.offsetLeft
-offsetY=e.clientY-icon.offsetTop
+offsetX=e.offsetX
+offsetY=e.offsetY
 
 document.onmousemove=ev=>{
 
-icon.style.left=ev.clientX-offsetX+"px"
-icon.style.top=ev.clientY-offsetY+"px"
+const w=screenToWorld(ev.clientX-offsetX,ev.clientY-offsetY)
+
+icon.dataset.x=w.x
+icon.dataset.y=w.y
+
+updateIcons()
 
 }
 
@@ -428,7 +452,15 @@ saveIcons()
 
 }
 
-/* icon save */
+function enableDelete(icon){
+
+icon.addEventListener("contextmenu",e=>{
+e.preventDefault()
+icon.remove()
+saveIcons()
+})
+
+}
 
 async function saveIcons(){
 
@@ -439,8 +471,8 @@ document.querySelectorAll(".icon").forEach(i=>{
 icons.push({
 text:i.innerText,
 class:i.className,
-x:i.style.left,
-y:i.style.top
+x:i.dataset.x,
+y:i.dataset.y
 })
 
 })
@@ -462,14 +494,17 @@ let icon=document.createElement("div")
 icon.className=d.class
 icon.innerText=d.text
 
-icon.style.left=d.x
-icon.style.top=d.y
+icon.dataset.x=d.x
+icon.dataset.y=d.y
 
 board.appendChild(icon)
 
+enableDelete(icon)
 drag(icon)
 
 })
+
+updateIcons()
 
 })
 
@@ -477,25 +512,44 @@ drag(icon)
 
 let pins=[]
 
-board.addEventListener("dblclick",e=>{
+board.addEventListener("click",e=>{
 
 if(mode!=="pin") return
 
 const rect=board.getBoundingClientRect()
 
-const x=e.clientX-rect.left
-const y=e.clientY-rect.top
+const w=screenToWorld(
+e.clientX-rect.left,
+e.clientY-rect.top
+)
 
-const p=document.createElement("div")
-p.className="pin"
-p.innerText="📍"
+pins.push(w)
 
-p.style.left=x+"px"
-p.style.top=y+"px"
-
-board.appendChild(p)
+updatePins()
 
 })
+
+function updatePins(){
+
+document.querySelectorAll(".pin").forEach(p=>p.remove())
+
+pins.forEach(p=>{
+
+const s=worldToScreen(p.x,p.y)
+
+const el=document.createElement("div")
+
+el.className="pin"
+el.innerText="📍"
+
+el.style.left=s.x+"px"
+el.style.top=s.y+"px"
+
+board.appendChild(el)
+
+})
+
+}
 
 /* clear */
 
