@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
@@ -17,6 +18,8 @@ height:100vh;
 overflow:hidden;
 }
 
+/* 左メニュー */
+
 #left{
 width:220px;
 background:#1a1a1a;
@@ -32,6 +35,8 @@ border-radius:6px;
 cursor:pointer;
 }
 
+/* ボード */
+
 #board{
 flex:1;
 position:relative;
@@ -46,7 +51,6 @@ width:100%;
 height:100%;
 object-fit:cover;
 z-index:1;
-transform-origin:center;
 }
 
 canvas{
@@ -68,7 +72,13 @@ font-weight:bold;
 color:white;
 cursor:grab;
 z-index:3;
-transform-origin:top left;
+}
+
+.pin{
+position:absolute;
+font-size:28px;
+z-index:4;
+pointer-events:none;
 }
 
 .police{background:#3498db;}
@@ -79,7 +89,7 @@ transform-origin:top left;
 position:absolute;
 top:10px;
 left:240px;
-z-index:4;
+z-index:5;
 }
 
 button{
@@ -88,6 +98,7 @@ padding:6px;
 }
 
 </style>
+
 </head>
 
 <body>
@@ -114,7 +125,7 @@ padding:6px;
 <h3>傭兵</h3>
 <div class="player" onclick="spawn('澪','merc')">神楽澪</div>
 <div class="player" onclick="spawn('弟','merc')">桃井そら</div>
-  
+
 </div>
 
 <div id="board">
@@ -136,10 +147,7 @@ padding:6px;
 
 <br>
 
-<button onclick="mode='line'">線</button>
-<button onclick="mode='arrow'">矢印</button>
-<button onclick="undo()">戻る</button>
-<button onclick="clearDraw()">削除</button>
+<button onclick="mode='line'">線</button> <button onclick="mode='arrow'">矢印</button> <button onclick="mode='pin'">ピン</button> <button onclick="undo()">戻る</button> <button onclick="clearDraw()">削除</button>
 
 </div>
 
@@ -149,6 +157,8 @@ padding:6px;
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js"
 import { getFirestore,doc,setDoc,onSnapshot,getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js"
+
+/* Firebase */
 
 const firebaseConfig={
 apiKey:"AIzaSyBmvXnvy1ttB8QllcCcm6eW2ZV7Qg-ZFW4",
@@ -162,20 +172,216 @@ appId:"1:121585105198:web:4fe893ae9be81ba23822bf"
 const app=initializeApp(firebaseConfig)
 const db=getFirestore(app)
 
-/* ユーザー色 */
-
-const userColor="#"+Math.floor(Math.random()*16777215).toString(16)
-  
 const params=new URLSearchParams(location.search)
-
 const room=params.get("room") || "main"
 
 const iconRef=doc(db,"boards",room+"_icons")
 const lineRef=doc(db,"boards",room+"_lines")
 
-const board=document.getElementById("board")
+/* 基本 */
 
-/* アイコン生成 */
+const board=document.getElementById("board")
+const map=document.getElementById("map")
+const canvas=document.getElementById("draw")
+const ctx=canvas.getContext("2d")
+
+let mode="line"
+
+/* view */
+
+let view={x:0,y:0,scale:1}
+
+/* resize */
+
+function resize(){
+canvas.width=board.clientWidth
+canvas.height=board.clientHeight
+}
+
+window.addEventListener("resize",resize)
+resize()
+
+/* transform */
+
+function applyTransform(){
+
+const t=`translate(${view.x}px,${view.y}px) scale(${view.scale})`
+
+map.style.transform=t
+canvas.style.transform=t
+
+}
+
+/* zoom */
+
+board.addEventListener("wheel",e=>{
+
+e.preventDefault()
+
+const rect=board.getBoundingClientRect()
+
+const mx=e.clientX-rect.left
+const my=e.clientY-rect.top
+
+const zoom=e.deltaY<0?1.1:0.9
+const newScale=Math.min(Math.max(view.scale*zoom,0.5),3)
+
+const scaleFactor=newScale/view.scale
+
+view.x=mx-(mx-view.x)*scaleFactor
+view.y=my-(my-view.y)*scaleFactor
+
+view.scale=newScale
+
+applyTransform()
+
+},{passive:false})
+
+/* pan */
+
+let panning=false
+let startX,startY
+
+board.addEventListener("mousedown",e=>{
+
+if(mode==="line"||mode==="arrow") return
+if(e.target.classList.contains("icon")) return
+
+panning=true
+
+startX=e.clientX-view.x
+startY=e.clientY-view.y
+
+})
+
+document.addEventListener("mousemove",e=>{
+
+if(!panning) return
+
+view.x=e.clientX-startX
+view.y=e.clientY-startY
+
+applyTransform()
+
+})
+
+document.addEventListener("mouseup",()=>panning=false)
+
+/* draw */
+
+let drawing=false
+let startX2,startY2
+let preview=null
+
+canvas.addEventListener("mousedown",e=>{
+
+if(mode!=="line"&&mode!=="arrow") return
+
+drawing=true
+
+startX2=e.offsetX
+startY2=e.offsetY
+
+})
+
+canvas.addEventListener("mousemove",e=>{
+
+if(!drawing) return
+
+preview={
+x1:startX2,
+y1:startY2,
+x2:e.offsetX,
+y2:e.offsetY,
+mode:mode
+}
+
+render()
+
+})
+
+canvas.addEventListener("mouseup",e=>{
+
+if(!drawing) return
+
+drawing=false
+
+saveLine({
+x1:startX2,
+y1:startY2,
+x2:e.offsetX,
+y2:e.offsetY,
+mode:mode
+})
+
+preview=null
+
+})
+
+/* render */
+
+let lines=[]
+
+function render(){
+
+ctx.clearRect(0,0,canvas.width,canvas.height)
+
+function draw(l,color="red"){
+
+ctx.beginPath()
+ctx.moveTo(l.x1,l.y1)
+ctx.lineTo(l.x2,l.y2)
+ctx.strokeStyle=color
+ctx.lineWidth=4
+ctx.stroke()
+
+if(l.mode==="arrow"){
+
+let angle=Math.atan2(l.y2-l.y1,l.x2-l.x1)
+
+ctx.beginPath()
+ctx.moveTo(l.x2,l.y2)
+ctx.lineTo(l.x2-15*Math.cos(angle-0.5),l.y2-15*Math.sin(angle-0.5))
+ctx.lineTo(l.x2-15*Math.cos(angle+0.5),l.y2-15*Math.sin(angle+0.5))
+ctx.fillStyle=color
+ctx.fill()
+
+}
+
+}
+
+lines.forEach(l=>draw(l))
+
+if(preview) draw(preview,"orange")
+
+}
+
+/* firebase lines */
+
+async function saveLine(line){
+
+let data={lines:[]}
+
+const snap=await getDoc(lineRef)
+if(snap.exists()) data=snap.data()
+
+data.lines.push(line)
+
+setDoc(lineRef,data)
+
+}
+
+onSnapshot(lineRef,snap=>{
+
+if(!snap.exists()) return
+
+lines=snap.data().lines
+
+render()
+
+})
+
+/* icons */
 
 window.spawn=function(char,type){
 
@@ -183,6 +389,7 @@ let icon=document.createElement("div")
 
 icon.className="icon "+type
 icon.innerText=char
+
 icon.style.left="200px"
 icon.style.top="200px"
 
@@ -194,65 +401,34 @@ saveIcons()
 
 }
 
-/* 右クリック削除 */
-
-function enableDelete(icon){
-
-icon.addEventListener("contextmenu",e=>{
-e.preventDefault()
-icon.remove()
-saveIcons()
-})
-
-}
-
-/* ドラッグ */
-
-function drag(el){
-
-enableDelete(el)
+function drag(icon){
 
 let offsetX,offsetY
 
-el.onmousedown=start
-el.ontouchstart=start
+icon.onmousedown=e=>{
 
-function start(e){
+offsetX=e.clientX-icon.offsetLeft
+offsetY=e.clientY-icon.offsetTop
 
-let touch=e.touches?e.touches[0]:e
+document.onmousemove=ev=>{
 
-offsetX=touch.clientX-el.offsetLeft
-offsetY=touch.clientY-el.offsetTop
-
-document.onmousemove=move
-document.ontouchmove=move
+icon.style.left=ev.clientX-offsetX+"px"
+icon.style.top=ev.clientY-offsetY+"px"
 
 }
 
-function move(e){
-
-let touch=e.touches?e.touches[0]:e
-
-el.style.left=touch.clientX-offsetX+"px"
-el.style.top=touch.clientY-offsetY+"px"
-
-}
-
-document.onmouseup=end
-document.ontouchend=end
-
-function end(){
+document.onmouseup=()=>{
 
 document.onmousemove=null
-document.ontouchmove=null
-
 saveIcons()
 
 }
 
 }
 
-/* 保存 */
+}
+
+/* icon save */
 
 async function saveIcons(){
 
@@ -273,22 +449,21 @@ setDoc(iconRef,{icons})
 
 }
 
-/* 受信 */
+onSnapshot(iconRef,snap=>{
 
-onSnapshot(iconRef,(snap)=>{
-
-if(!snap.exists())return
+if(!snap.exists()) return
 
 document.querySelectorAll(".icon").forEach(i=>i.remove())
 
-snap.data().icons.forEach(data=>{
+snap.data().icons.forEach(d=>{
 
 let icon=document.createElement("div")
 
-icon.className=data.class
-icon.innerText=data.text
-icon.style.left=data.x
-icon.style.top=data.y
+icon.className=d.class
+icon.innerText=d.text
+
+icon.style.left=d.x
+icon.style.top=d.y
 
 board.appendChild(icon)
 
@@ -298,259 +473,56 @@ drag(icon)
 
 })
 
-/* canvas */
+/* pins */
 
-const canvas=document.getElementById("draw")
-const ctx=canvas.getContext("2d")
+let pins=[]
 
-function resize(){
+board.addEventListener("dblclick",e=>{
 
-canvas.width=board.clientWidth
-canvas.height=board.clientHeight
+if(mode!=="pin") return
 
+const rect=board.getBoundingClientRect()
+
+const x=e.clientX-rect.left
+const y=e.clientY-rect.top
+
+const p=document.createElement("div")
+p.className="pin"
+p.innerText="📍"
+
+p.style.left=x+"px"
+p.style.top=y+"px"
+
+board.appendChild(p)
+
+})
+
+/* clear */
+
+window.clearDraw=async()=>{
+await setDoc(lineRef,{lines:[]})
 }
 
-window.onresize=resize
-resize()
+/* undo */
 
-let drawing=false
-let startX,startY
-let mode="line"
-
-canvas.onmousedown=e=>{
-
-drawing=true
-startX=e.offsetX
-startY=e.offsetY
-
-}
-
-canvas.onmouseup=e=>{
-
-if(!drawing)return
-drawing=false
-
-let line={
-x1:startX,
-y1:startY,
-x2:e.offsetX,
-y2:e.offsetY,
-mode:mode
-}
-
-saveLine(line)
-
-}
-
-async function saveLine(line){
-
-let data={lines:[]}
+window.undo=async()=>{
 
 const snap=await getDoc(lineRef)
 
-if(snap.exists())data=snap.data()
-
-data.lines.push(line)
-
-setDoc(lineRef,data)
-
-}
-
-onSnapshot(lineRef,(snap)=>{
-
-if(!snap.exists())return
-
-ctx.clearRect(0,0,canvas.width,canvas.height)
-
-snap.data().lines.forEach(l=>{
-
-ctx.beginPath()
-ctx.moveTo(l.x1,l.y1)
-ctx.lineTo(l.x2,l.y2)
-ctx.strokeStyle="red"
-ctx.lineWidth=4
-ctx.stroke()
-
-if(l.mode==="arrow"){
-
-let angle=Math.atan2(l.y2-l.y1,l.x2-l.x1)
-
-ctx.beginPath()
-ctx.moveTo(l.x2,l.y2)
-ctx.lineTo(l.x2-15*Math.cos(angle-0.5),l.y2-15*Math.sin(angle-0.5))
-ctx.lineTo(l.x2-15*Math.cos(angle+0.5),l.y2-15*Math.sin(angle+0.5))
-ctx.fillStyle="red"
-ctx.fill()
-
-}
-
-})
-
-})
-
-/* 全体ズーム */
-
-let scale = 1
-
-
-/* PCズーム */
-
-board.addEventListener("wheel",e=>{
-
-e.preventDefault()
-
-scale += e.deltaY * -0.001
-scale = Math.min(Math.max(.5,scale),3)
-
-})
-
-/* スマホピンチズーム */
-
-let startDist = 0
-
-board.addEventListener("touchstart",e=>{
-
-if(e.touches.length == 2){
-
-startDist = Math.hypot(
-e.touches[0].clientX - e.touches[1].clientX,
-e.touches[0].clientY - e.touches[1].clientY
-)
-
-}
-
-})
-
-board.addEventListener("touchmove",e=>{
-
-if(e.touches.length == 2){
-
-let newDist = Math.hypot(
-e.touches[0].clientX - e.touches[1].clientX,
-e.touches[0].clientY - e.touches[1].clientY
-)
-
-scale *= newDist / startDist
-scale = Math.min(Math.max(.5,scale),3)
-
-startDist = newDist
-
-}
-
-})
-
-  /* 線削除 */
-
-window.clearDraw = async function(){
-
-ctx.clearRect(0,0,canvas.width,canvas.height)
-
-await setDoc(lineRef,{lines:[]})
-
-}
-
-/* Undo */
-
-window.undo = async function(){
-
-const snap = await getDoc(lineRef)
-
 if(!snap.exists()) return
 
-let data = snap.data()
-
-if(!data.lines) return
+let data=snap.data()
 
 data.lines.pop()
 
 await setDoc(lineRef,data)
 
 }
-  /* マップ切替 */
+
+/* map change */
 
 document.getElementById("mapSelect").addEventListener("change",e=>{
-
-document.getElementById("map").src=e.target.value
-
-})
-
-  /* マップパン */
-
-let panX = 0
-let panY = 0
-let isPanning = false
-let panStartX = 0
-let panStartY = 0
-
-function applyTransform(){
-
-document.getElementById("map").style.transform =
-`translate(${panX}px,${panY}px) scale(${scale})`
-
-canvas.style.transform =
-`translate(${panX}px,${panY}px) scale(${scale})`
-
-}
-
-/* PCドラッグ */
-
-board.addEventListener("mousedown",e=>{
-
-if(e.target.classList.contains("icon")) return
-
-isPanning = true
-panStartX = e.clientX - panX
-panStartY = e.clientY - panY
-
-})
-
-document.addEventListener("mousemove",e=>{
-
-if(!isPanning) return
-
-panX = e.clientX - panStartX
-panY = e.clientY - panStartY
-
-applyTransform()
-
-})
-
-document.addEventListener("mouseup",()=>{
-
-isPanning = false
-
-})
-
-/* スマホドラッグ */
-
-board.addEventListener("touchstart",e=>{
-
-if(e.touches.length==1){
-
-isPanning=true
-
-panX = e.touches[0].clientX - panStartX
-panY = e.touches[0].clientY - panStartY
-
-}
-
-})
-
-board.addEventListener("touchmove",e=>{
-
-if(!isPanning) return
-
-panX = e.touches[0].clientX - panStartX
-panY = e.touches[0].clientY - panStartY
-
-applyTransform()
-
-})
-
-board.addEventListener("touchend",()=>{
-
-isPanning=false
-
+map.src=e.target.value
 })
 
 </script>
